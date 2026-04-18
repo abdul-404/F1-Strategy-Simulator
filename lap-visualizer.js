@@ -288,17 +288,7 @@ class LapVisualizer {
       data: {
         labels,
         datasets: [
-          {
-            label: 'Fuel (L)',
-            data: fuel,
-            borderColor: '#00d9ff',
-            backgroundColor: 'rgba(0, 217, 255, 0.1)',
-            borderWidth: 2,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 2,
-            yAxisID: 'y'
-          },
+          
           {
             label: 'Tyre Age (laps)',
             data: tyreAge,
