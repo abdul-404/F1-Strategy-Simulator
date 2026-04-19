@@ -10,3 +10,4 @@ fastf1_cache/
 strategy_database.pkl
 *.pkl
 .claude
+test_backend.py

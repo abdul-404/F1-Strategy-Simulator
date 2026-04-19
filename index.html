@@ -187,8 +187,8 @@
             </button>
         </div>
 
-        <div class="p-6">
-            <canvas id="track-canvas" width="800" height="400" class="w-full h-auto bg-slate-900 rounded-lg shadow-inner"></canvas>
+        <div class="p-6 flex items-center justify-center">
+            <img id="track-image" src="" alt="Track Layout" class="w-full h-auto max-h-[70vh] object-contain rounded-lg shadow-inner bg-slate-900" />
         </div>
     </div>
 </div>
@@ -415,14 +415,15 @@
                 // Populate Races
                 raceSelectEl.innerHTML = '<option value="" disabled>Select a race...</option>'; // Clear "loading"
                 if (data.races && data.races.length > 0) {
-                    data.races.forEach(race => {
+                    const filteredRaces = data.races.filter(r => !r.toLowerCase().includes('pre-season'));
+                    filteredRaces.forEach(race => {
                         const option = document.createElement('option');
                         option.value = race;
                         option.textContent = race;
                         raceSelectEl.appendChild(option);
                     });
                     // Set default race to the first in the list
-                    raceSelectEl.value = data.races[0];
+                    raceSelectEl.value = filteredRaces[0];
                 } else {
                     raceSelectEl.innerHTML = '<option value="" disabled selected>No races found</option>';
                 }
@@ -498,6 +499,15 @@
 
                 if (!response.ok) {
                     throw new Error(data.detail || 'Simulation failed.');
+                }
+
+                console.log('=== RAW API RESPONSE ===');
+                console.log('Full data:', data);
+                console.log('Top 3 results:', data.top_3_results);
+                if (data.top_3_results && data.top_3_results.length > 0) {
+                    console.log('First result:', data.top_3_results[0]);
+                    console.log('First result fuel_levels:', data.top_3_results[0].fuel_levels);
+                    console.log('First result tyre_ages:', data.top_3_results[0].tyre_ages);
                 }
 
                 // --- Success: Display results ---
@@ -596,7 +606,7 @@
             }
 
             // 4. Render Visualization
-            renderChart(data.visualization_data);
+            renderChart(data.visualization_data, data.top_3_results);
 
             // 5. Setup insights rendering
             setupInsightsRendering(data);
@@ -640,9 +650,9 @@
         /**
          * Renders all three chart types
          */
-        function renderChart(vizData) {
+        function renderChart(vizData, resultsData) {
             renderStintChart(vizData);
-            renderTimeAnalysisChart(vizData);
+            renderTimeAnalysisChart(vizData, resultsData);
             renderCompositionChart(vizData);
         }
 
@@ -741,14 +751,31 @@
         /**
          * Renders Time Analysis - Gap to Optimal Strategy
          */
-        function renderTimeAnalysisChart(vizData) {
+        function renderTimeAnalysisChart(vizData, resultsData) {
             const ctx = document.getElementById('time-analysis-chart').getContext('2d');
 
-            // Mock time data based on strategy names (in a real app, this would come from API)
-            const timeGaps = vizData.map((d, idx) => ({
-                name: d.name,
-                gap: idx === 0 ? 0 : (idx * 2.5)
-            }));
+            // Calculate actual time deltas from results data
+            const timeGaps = [];
+            if (resultsData && resultsData.length > 0) {
+                const optimalTime = resultsData[0].total_time; // First result is optimal
+                timeGaps.push({
+                    name: resultsData[0].name || 'Strategy 1',
+                    gap: 0
+                });
+                
+                for (let i = 1; i < resultsData.length; i++) {
+                    const delta = resultsData[i].total_time - optimalTime;
+                    timeGaps.push({
+                        name: resultsData[i].name || `Strategy ${i + 1}`,
+                        gap: parseFloat(delta.toFixed(2))
+                    });
+                }
+            } else {
+                // Fallback: use mock data if no results available
+                timeGaps.push({ name: 'Strategy 1', gap: 0 });
+                timeGaps.push({ name: 'Strategy 2', gap: 2.5 });
+                timeGaps.push({ name: 'Strategy 3', gap: 5 });
+            }
 
             if (timeAnalysisChart) timeAnalysisChart.destroy();
 
@@ -1167,6 +1194,13 @@
                 };
             });
 
+            console.log('=== FORMATTED STRATEGIES DEBUG ===');
+            console.log('First strategy full data:', formattedStrategies[0]);
+            console.log('Fuel levels:', formattedStrategies[0].fuel_levels);
+            console.log('Fuel levels length:', formattedStrategies[0].fuel_levels.length);
+            console.log('Tyre ages:', formattedStrategies[0].tyre_ages);
+            console.log('Tyre ages length:', formattedStrategies[0].tyre_ages.length);
+
             const hasLapData =
                 formattedStrategies[0].lap_times.length > 0 &&
                 formattedStrategies[0].fuel_levels.length > 0 &&
@@ -1204,95 +1238,35 @@
     let trackChartInstance = null;
 
 // Only expect raceName now
-async function showTrackMap(raceName) {
+function showTrackMap(raceName) {
     if (!raceName) {
         console.error("Missing race name!");
-        return; 
+        return;
     }
 
-    try {
-        const response = await fetch(`/api/track-layout/${raceName}`);
-        
-        if (!response.ok) {
-            console.error(`API Error: ${response.status} - ${response.statusText}`);
-            return; 
-        }
+    const modal = document.getElementById('track-map-modal');
+    const title = document.getElementById('track-map-title');
+    const img = document.getElementById('track-image');
 
-        const data = await response.json();
-
-        // 1. Combine X and Y arrays
-        const trackPoints = data.x.map((xCoord, index) => {
-            return { x: xCoord, y: data.y[index] };
-        });
-
-        // 2. Prepare the Canvas and Modal
-        const canvas = document.getElementById('track-canvas');
-        const modal = document.getElementById('track-map-modal'); // <-- Using modal now!
-        const title = document.getElementById('track-map-title');
-        
-        if (!canvas || !modal) {
-            console.error("Could not find the canvas or modal elements in the HTML!");
-            return;
-        }
-
-        const ctx = canvas.getContext('2d');
-        
-        // Show the modal and update the title
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        title.textContent = `📍 ${raceName.charAt(0).toUpperCase() + raceName.slice(1)} Layout`;
-
-        // Clear any previous track drawings
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 3. Math to scale the track to fit inside the canvas perfectly
-        const minX = Math.min(...trackPoints.map(p => p.x));
-        const maxX = Math.max(...trackPoints.map(p => p.x));
-        const minY = Math.min(...trackPoints.map(p => p.y));
-        const maxY = Math.max(...trackPoints.map(p => p.y));
-
-        const trackWidth = maxX - minX;
-        const trackHeight = maxY - minY;
-
-        // Leave a 40px padding margin around the edges
-        const padding = 40; 
-        const scale = Math.min(
-            (canvas.width - padding * 2) / trackWidth,
-            (canvas.height - padding * 2) / trackHeight
-        );
-
-        // Center the map
-        const offsetX = (canvas.width - trackWidth * scale) / 2;
-        const offsetY = (canvas.height - trackHeight * scale) / 2;
-
-        // 4. Draw the geometry
-        ctx.beginPath();
-        ctx.strokeStyle = '#00d9ff'; // Cyan line
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        trackPoints.forEach((point, index) => {
-            // Apply scale and offset
-            const screenX = (point.x - minX) * scale + offsetX;
-            
-            // Subtract from canvas.height to flip the Y-axis!
-            const screenY = canvas.height - ((point.y - minY) * scale + offsetY); 
-
-            if (index === 0) {
-                ctx.moveTo(screenX, screenY);
-            } else {
-                ctx.lineTo(screenX, screenY);
-            }
-        });
-
-        // Close the loop (connect last point to first point)
-        ctx.closePath();
-        ctx.stroke();
-
-    } catch (error) {
-        console.error("Error fetching or drawing track map:", error);
+    if (!modal || !img) {
+        console.error("Could not find modal or image elements!");
+        return;
     }
+
+    // Map race name to image filename
+    // Special case: "Belgian Grand Prix" maps to "Belgium_Grand_Prix.png"
+    const nameOverrides = {
+        'Belgian Grand Prix': 'Belgium_Grand_Prix'
+    };
+    const baseName = nameOverrides[raceName] || raceName.replace(/ /g, '_');
+    const imageUrl = `/race-tracks/${baseName}.png`;
+
+    img.src = imageUrl;
+    img.alt = `${raceName} Layout`;
+    title.textContent = `📍 ${raceName}`;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 }
 
 function renderTrackChart(dataPoints) {
@@ -1435,13 +1409,13 @@ async function loadApiData() {
         raceDropdown.innerHTML = '<option value="" disabled selected>Select a race...</option>';
 
         // Populate the dropdown with the races from your database
-        data.races.forEach(race => {
+        data.races.filter(r => !r.toLowerCase().includes('pre-season')).forEach(race => {
             const option = document.createElement('option');
             option.value = race; // This is the exact string your backend needs (e.g., 'bahrain')
-            
+
             // Capitalize the first letter so it looks nice in the UI (e.g., 'Bahrain')
-            option.textContent = race.charAt(0).toUpperCase() + race.slice(1); 
-            
+            option.textContent = race.charAt(0).toUpperCase() + race.slice(1);
+
             raceDropdown.appendChild(option);
         });
 

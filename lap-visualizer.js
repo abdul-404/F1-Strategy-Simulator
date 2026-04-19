@@ -283,12 +283,27 @@ class LapVisualizer {
     const tyreAge = this.data.tyre_ages || [];
     const labels = fuel.map((_, i) => `L${i + 1}`);
 
+    // Debug: Log the data to ensure it's being passed correctly
+    console.log('Fuel data:', fuel);
+    console.log('Tyre data:', tyreAge);
+    console.log('Labels:', labels);
+
     this.charts.fueltyre = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
         datasets: [
-          
+          {
+            label: 'Fuel Load (kg)',
+            data: fuel,
+            borderColor: '#06b6d4',
+            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2,
+            yAxisID: 'y'
+          },
           {
             label: 'Tyre Age (laps)',
             data: tyreAge,
@@ -308,8 +323,20 @@ class LapVisualizer {
         interaction: { mode: 'index', intersect: false },
         plugins: { legend: { labels: { color: '#cbd5e1' } } },
         scales: {
-          y: { display: true, grid: { color: 'rgba(100, 116, 139, 0.1)' }, ticks: { color: '#cbd5e1' } },
-          y1: { display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#cbd5e1' } },
+          y: {
+            display: true,
+            min: 0,
+            max: 110,
+            grid: { color: 'rgba(100, 116, 139, 0.1)' },
+            ticks: { color: '#06b6d4', callback: v => v + ' kg' }
+          },
+          y1: {
+            display: true,
+            position: 'right',
+            min: 0,
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#ffbe0b', callback: v => v + ' laps' }
+          },
           x: { grid: { display: false }, ticks: { color: '#cbd5e1', maxTicksLimit: 10 } }
         }
       }
@@ -367,7 +394,7 @@ class LapVisualizer {
       typeof lapData.lapTime === 'number' ? lapData.lapTime.toFixed(3) + 's' : '-';
     document.getElementById('lv-info-position').textContent = lapData.position;
     document.getElementById('lv-info-fuel').textContent =
-      typeof lapData.fuel === 'number' ? lapData.fuel.toFixed(1) + 'L' : '-';
+      typeof lapData.fuel === 'number' ? lapData.fuel.toFixed(1) + 'kg' : '-';
     document.getElementById('lv-info-tyre').textContent =
       typeof lapData.tyreAge === 'number' ? lapData.tyreAge + ' laps' : '-';
 

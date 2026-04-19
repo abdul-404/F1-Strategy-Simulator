@@ -281,7 +281,7 @@ def run_simulation(driver_name: str, race_name: str, pit_stop_loss: float, db: D
     print(f"  - Weather: {weather}, Grid Position: {grid_position}\n")
 
     # Initialize enhanced analyzer with all new models
-    fuel_model = FuelModel(max_fuel=110.0, fuel_map='BALANCED')
+    fuel_model = FuelModel(max_fuel=100.0, fuel_map='BALANCED')
     degradation_model = EnhancedDegradationModel(track_roughness=1.0)
     fatigue_model = DriverFatigueModel(driver_stamina=1.1)  # Assume good fitness
     uncertainty_model = BayesianUncertaintyModel()
@@ -508,28 +508,22 @@ def run_simulation(driver_name: str, race_name: str, pit_stop_loss: float, db: D
             tyre_ages.append(tyre_age)
             tyre_age += 1
 
-        # Generate fuel levels - realistic consumption based on strategy compounds
+        # Generate fuel levels - starts at 100 kg, ends at 15 kg, no refueling at pit stops
+        # Calculate fuel consumption per lap based on exact start and end values
+        start_fuel = 100.0
+        end_fuel = 15.0
+        consumption_per_lap = (start_fuel - end_fuel) / total_laps
+        
+        # Generate fuel levels for each lap (lap 0 through lap total_laps-1)
+        # Fuel at start of lap i = 100 - consumption_per_lap * i
         fuel_levels = []
-        fuel = 110.0
-        compounds = strat_result.get('compounds', ['MEDIUM'])
-        stint_lengths = [total_laps // len(compounds)] * len(compounds)
-        for i in range(total_laps % len(compounds)):
-            stint_lengths[i] += 1
-
-        stint_idx = 0
-        lap_in_stint = 0
-        fuel_consumption = {'SOFT': 1.3, 'MEDIUM': 1.2, 'HARD': 1.0}
-
-        for lap in range(1, total_laps + 1):
-            if lap_in_stint >= stint_lengths[stint_idx] and stint_idx < len(compounds) - 1:
-                stint_idx += 1
-                lap_in_stint = 0
-                fuel = 110.0
-
-            consumption = fuel_consumption.get(compounds[stint_idx], 1.2)
-            fuel_levels.append(max(0, fuel))
-            fuel -= consumption
-            lap_in_stint += 1
+        for lap_index in range(total_laps):
+            fuel_remaining = start_fuel - consumption_per_lap * lap_index
+            fuel_levels.append(round(fuel_remaining, 2))
+        
+        # Ensure last element is exactly 15 kg (it will be ~15.something, so we clamp it)
+        if fuel_levels:
+            fuel_levels[-1] = end_fuel
 
         # Generate realistic positions based on strategy time delta
         positions = []

@@ -81,6 +81,8 @@ async def get_lap_visualizer_css():
     else:
         raise HTTPException(status_code=404, detail="lap-visualizer.css not found")
 
+app.mount("/race-tracks", StaticFiles(directory="Race Tracks"), name="race-tracks")
+
 @app.on_event("startup")
 async def startup_event():
     """Run on server startup."""
